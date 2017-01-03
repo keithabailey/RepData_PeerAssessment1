@@ -5,21 +5,151 @@ output:
     keep_md: true
 ---
 
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Figs/',
+                      echo=TRUE, warning=FALSE, message=FALSE)
+```
 
-## Loading and preprocessing the data
 
+## Loading and preprocessing the data  
+Unzip and load the data into memory
+
+```{r, echo = TRUE}
+setwd("C:/Users/keith_bailey/Documents/GitHub/RepData_PeerAssessment1")
+unzip("activity.zip")
+activity<-data.table::fread("activity.csv")
+```
+
+Cleanup the dates so they show date types in the dataframe  
+```{r, echo = TRUE}
+activity$date<-as.Date(lubridate::fast_strptime(activity$date, format="%Y-%m-%d"))
+
+```
 
 
 ## What is mean total number of steps taken per day?
+```{r, echo = TRUE}
+#Load required packages
+require(dplyr)
+require(ggplot2)
+require(lubridate)
+```
 
+```{r, echo = TRUE}
+steps_per_day<-activity%>%
+               filter(!is.na(steps))%>%
+               group_by(date)%>%
+               summarise(total_no_steps_per_day = sum(steps))
 
+steps_per_day
+```
+
+###Plot daily step data in histogram and barplot to investigate
+
+```{r, echo=TRUE}
+#histogram - default number of bins
+qplot(steps_per_day$total_no_steps_per_day, geom="histogram") + labs(x="Total Number of Steps per Day")
+```
+
+The number of bins need some manual work as default too many to be meaningful; I prefer to use a density plot to assess the data
+
+```{r, echo = TRUE}
+ggplot(steps_per_day, aes(x=total_no_steps_per_day)) + geom_density() + labs(x="Total Number of Steps per Day")
+
+```
+
+``` {r, echo = TRUE}
+#mean steps taken each day
+mean(steps_per_day$total_no_steps_per_day)
+
+#median steps taken each day
+median(steps_per_day$total_no_steps_per_day)
+```
 
 ## What is the average daily activity pattern?
 
+``` {r, echo = TRUE}
+steps_per_interval<-activity%>%
+               filter(!is.na(steps))%>%
+               group_by(interval)%>%
+               summarise(mean_per_interval = mean(steps))
+
+plot(x=steps_per_interval$interval, y=steps_per_interval$mean_per_interval, type="l", xlab = "5 Minute intervals throughout the day", ylab = "Mean Steps Taken per 5 Minute Interval") 
+```
+
+Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+``` {r, echo=TRUE}
+steps_per_interval[steps_per_interval$mean_per_interval==max(steps_per_interval$mean_per_interval),]
+
+```
 
 
 ## Imputing missing values
 
+1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+```{r, echo = TRUE}
+sum(is.na(activity$steps))
 
+#or as a percentage of total observations
+paste(round(sum(is.na(activity$steps))/length(activity$steps)*100,2),"%", sep="")
+
+```
+2. Devise a strategy for filling in all of the missing values in the dataset. 
+
+We will be using the median values per 5 minute interval & which day of the week to fill in mising values
+
+``` {r, echo = TRUE}
+
+#add days of week to our data
+
+activity<-activity%>%mutate(day_of_week=wday(date, label=TRUE))
+
+#replace 
+activity2<-activity %>%
+     group_by(interval, day_of_week) %>% 
+     mutate_each(funs(replace(., which(is.na(.)),
+                                mean(., na.rm=TRUE))))
+
+```
+
+### Based on the new data set, repeat our analysis above
+
+```{r, echo = TRUE}
+steps_per_day2<-activity2%>%
+               group_by(date)%>%
+               summarise(total_no_steps_per_day = sum(steps))
+
+steps_per_day2
+
+#histogram of the new "complete" dataset
+qplot(steps_per_day2$total_no_steps_per_day, geom="histogram") + labs(x = "Total Number of Steps per Day")
+
+
+#density
+ggplot(steps_per_day2, aes(x=total_no_steps_per_day)) + geom_density() + labs(x = "Total Number of Steps Per Day")
+
+#mean steps taken each day
+mean(steps_per_day2$total_no_steps_per_day)
+
+#median steps taken each day
+median(steps_per_day2$total_no_steps_per_day)
+
+```
+Comparing the original dataset vs the dataset with missing values imputed, we can see minor differences in the mean (original: `r round(mean(steps_per_day$total_no_steps_per_day),2)`; imputed: `r round(mean(steps_per_day2$total_no_steps_per_day),2)`) and median (original: `r round(median(steps_per_day$total_no_steps_per_day),2)`; imputed: `r round(median(steps_per_day2$total_no_steps_per_day),2)`)
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r, echo=TRUE}
+
+#bucket days of the week into two factors; weekend & weekday
+activity2$weekend <- chron::is.weekend(activity2$date)
+activity2$weekend[activity2$weekend==TRUE]<-"weekend"
+activity2$weekend[activity2$weekend==FALSE]<-"weekday"
+
+steps_per_interval_weekends<-activity2%>%
+               group_by(interval, weekend)%>%
+               summarise(mean_per_interval = mean(steps))
+
+ggplot(steps_per_interval_weekends, aes(x=interval, y=mean_per_interval)) + geom_line() + facet_wrap(~weekend) + labs(x = "Interval periods (5 minute blocks)", y = "Average Number of steps per interval")
+
+```

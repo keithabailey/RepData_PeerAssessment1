@@ -1,0 +1,15 @@
+base
+RPostgres
+DBI
+rJava
+RJDBC
+rmarkdown
+plyr
+dplyr
+RPostgreSQL
+data.table
+lubridate
+ggplot2
+knitr
+plotly
+markdown
